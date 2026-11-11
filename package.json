@@ -1,0 +1,20 @@
+{
+  "name": "hookline",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Lightweight PWA that plays only the highlights of your songs, with lock-screen playback.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build && node scripts/check-size.mjs",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "fixtures": "sh scripts/make-fixtures.sh"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "typescript": "5.9.3",
+    "vite": "8.3.8",
+    "vitest": "5.1.0"
+  }
+}

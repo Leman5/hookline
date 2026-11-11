@@ -1,0 +1,7 @@
+node_modules/
+dist/
+private/
+test/fixtures/*.mp3
+test/fixtures/*.m4a
+test/fixtures/*.f32
+.DS_Store
