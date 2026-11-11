@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { analyze } from '../src/analysis/analyze.ts';
 import { extractFeatures } from '../src/analysis/features.ts';
 import { fft } from '../src/analysis/fft.ts';
@@ -57,10 +57,15 @@ describe('tempo', () => {
 });
 
 describe.runIf(hasFfmpeg && existsSync('test/fixtures/song120.mp3'))('fixture song', () => {
-  const pcm = decode('test/fixtures/song120.mp3');
-  const t0 = performance.now();
-  const a = analyze(pcm, SR);
-  const ms = performance.now() - t0;
+  // Vitest runs a skipped describe body while collecting, so the decode must not happen here.
+  let a: ReturnType<typeof analyze>;
+  let ms = 0;
+  beforeAll(() => {
+    const pcm = decode('test/fixtures/song120.mp3');
+    const t0 = performance.now();
+    a = analyze(pcm, SR);
+    ms = performance.now() - t0;
+  });
 
   it('reads the tempo', () => {
     expect(a.confident).toBe(true);
