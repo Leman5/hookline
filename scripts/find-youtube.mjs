@@ -27,6 +27,10 @@ function isoSeconds(d) {
   return m ? (+(m[1] ?? 0)) * 3600 + (+(m[2] ?? 0)) * 60 + (+(m[3] ?? 0)) : 0;
 }
 
+const SEQUEL = /^(ii|iii|iv|v|vi|2|3|4|5|6)$/;
+const sequels = (t) => t.split(' ').filter((w) => SEQUEL.test(w));
+const entities = (s) => s.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+
 function score(song, cand) {
   const want = normalizeTitle(song.title);
   const title = normalizeTitle(cand.title.replace(/\|/g, ' - '));
@@ -39,6 +43,9 @@ function score(song, cand) {
   // Auto-generated "Artist - Topic" uploads are the plain studio audio: no film dialogue intro.
   if (/ - topic$/i.test(cand.channel)) s += 0.15;
   if (BAD.test(cand.title) && !BAD.test(song.title)) s -= 0.5;
+  // "Song III" is not "Song II": every sequel number in the wanted title must be in the upload's title.
+  const have = new Set(full.split(' '));
+  if (sequels(want).some((w) => !have.has(w))) s -= 0.5;
   if (!(cand.seconds >= 90 && cand.seconds <= 12 * 60)) s -= 1;
   if (!cand.embeddable) s -= 2;
   return s;
@@ -67,7 +74,7 @@ for (const song of order) {
     const meta = new Map(v.items.map((i) => [i.id, { seconds: isoSeconds(i.contentDetails?.duration), embeddable: i.status?.embeddable !== false }]));
     const cands = r.items
       .filter((i) => i.id.videoId)
-      .map((i) => ({ id: i.id.videoId, title: i.snippet.title, channel: i.snippet.channelTitle, ...meta.get(i.id.videoId) }));
+      .map((i) => ({ id: i.id.videoId, title: entities(i.snippet.title), channel: entities(i.snippet.channelTitle), ...meta.get(i.id.videoId) }));
     const ranked = cands.map((c) => ({ sc: score(song, c), c })).sort((a, b) => b.sc - a.sc);
     const best = ranked[0];
     // Keep up to three good uploads: some labels block embedding, and the app tries them in order.
@@ -80,7 +87,7 @@ for (const song of order) {
     console.log(`${ok ? best.sc.toFixed(2) : 'MISS'}  ${song.list.padEnd(7)} ${song.title}  ->  ${ok ? `${best.c.title} [${best.c.channel}] ${best.c.seconds}s` : best?.c.title ?? 'no results'}`);
     writeFileSync(cachePath, JSON.stringify(cache, null, 1));
   } catch (e) {
-    if (e.reason === 'quotaExceeded' || e.reason === 'dailyLimitExceeded') {
+    if (e.reason === 'quotaExceeded' || e.reason === 'dailyLimitExceeded' || e.reason === 'rateLimitExceeded') {
       console.log(`Daily quota used up after ${searched} searches. Run again tomorrow to finish the rest.`);
       stopped = true;
       break;
