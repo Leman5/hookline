@@ -8,13 +8,26 @@ It's a static web app installed to the home screen (a PWA), with about 19 KB of 
 
 | Situation | What you hear |
 |---|---|
-| Screen on, song has a YouTube video | The **full song** in the visible YouTube player, cut to a ~65–75 s hook |
+| Screen on, song has a YouTube video | The song's **chorus** (detected from synced lyrics) in the visible YouTube player, then the next song |
 | Another tab or window, and the browser keeps YouTube playing (desktop) | Still the **full song** |
 | Phone locked and the browser pauses YouTube | The same song continues as Apple's free **30 s preview** on a plain `<audio>` element, with lock-screen controls |
 | Screen back on | Back to the **full song**, picking up where the hook had got to |
 | A music file you imported | The **full file**, with chorus/drop detection run on your phone; keeps playing when locked |
 
 Hookline never forces YouTube to play in the background. It switches to the preview only when the browser has actually paused or stalled the video. While YouTube plays, the app keeps a silent audio track running, so it already owns a playing media element. When YouTube stops, that element takes over with the audio version of the current song, without a gap. YouTube's terms only allow background play with YouTube Premium, and Chrome on Android normally pauses embedded videos when the screen locks.
+
+### Chorus detection (YouTube songs)
+
+Hookline never downloads YouTube audio, so it finds the chorus from **time-synced lyrics** in the free [LRCLIB](https://lrclib.net) database (`scripts/find-hooks.mjs`, run when building the seed link):
+
+1. Look up the song's synced lyrics (each line has a timestamp).
+2. The lines that repeat most, grouped into runs, are the chorus. The first strong run after the intro and before the last 40% of the song wins (outros often repeat the chorus).
+3. Pick the YouTube upload whose length matches the lyrics within 3.5 s, so the lyric timestamps are the video's timestamps. If none matches, search once for one (usually the plain audio upload).
+4. The seed link carries the chorus. The app plays it from just before it starts: Commute 40–70 s, Gym 25–50 s.
+
+Songs without synced lyrics fall back to a typical position, and are marked "guessed" in the playlist. You can fix any song on its **Edit** screen.
+
+YouTube may play an ad before a song. The bar says so, and the song starts after it (tap Skip when YouTube shows it). YouTube Premium removes ads.
 
 ### Highlight detection (your own files)
 
@@ -58,7 +71,10 @@ NODE_USE_ENV_PROXY=1 node scripts/resolve-seeds.mjs private/seeds-input.tsv priv
 # 3. Optional: find full-song YouTube videos (free YouTube Data API key in private/youtube-key.txt;
 #    about 100 songs per day on the free quota, and re-running continues)
 node scripts/find-youtube.mjs private/seeds.json
-# 4. Open the link in private/seeds-link.txt on the phone
+# 4. Find each song's chorus from synced lyrics, then rewrite the link with it
+NODE_USE_ENV_PROXY=1 node scripts/find-hooks.mjs private/seeds.json
+node scripts/find-youtube.mjs private/seeds.json
+# 5. Open the link in private/seeds-link.txt on the phone
 ```
 
 ## Development

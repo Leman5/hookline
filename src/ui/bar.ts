@@ -58,7 +58,8 @@ export function mountBar(root: HTMLElement, player: Player, ytHost: HTMLElement)
       return;
     }
     const part = item.parts > 1 ? ` · part ${item.part + 1}/${item.parts}` : '';
-    const via = player.route === 'yt' ? 'full song' : item.track.source === 'preview' ? '30 s preview' : 'your file';
+    const yt = player.route === 'yt' ? (settings.mode === 'full' ? 'whole song' : item.track.ytHook ? 'chorus' : 'hook') : '';
+    const via = yt ? `${yt} via YouTube` : item.track.source === 'preview' ? '30 s preview' : 'your file';
     title.textContent = item.track.title;
     sub.textContent = ad || `${item.track.artist}${part} · ${item.list === 'gym' ? 'Gym' : 'Commute'} · ${via}`;
     const { pos, len } = player.position();
