@@ -48,7 +48,9 @@ export function mountBar(root: HTMLElement, player: Player, ytHost: HTMLElement)
     const part = item.parts > 1 ? ` · part ${item.part + 1}/${item.parts}` : '';
     const via = player.route === 'yt' ? 'full song' : item.track.source === 'preview' ? '30 s preview' : 'your file';
     title.textContent = item.track.title;
-    sub.textContent = `${item.track.artist}${part} · ${item.list === 'gym' ? 'Gym' : 'Commute'} · ${via}`;
+    sub.textContent = player.ytAd
+      ? 'YouTube ad, then the next full song (tap Skip when YouTube offers it)'
+      : `${item.track.artist}${part} · ${item.list === 'gym' ? 'Gym' : 'Commute'} · ${via}`;
     const { pos, len } = player.position();
     fill.style.width = len > 0 ? `${Math.min(100, (100 * pos) / len)}%` : '0';
     time.textContent = `${mmss(pos)} / ${mmss(len)}`;

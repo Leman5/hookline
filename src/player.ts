@@ -123,6 +123,10 @@ export class Player {
       }
     };
     this.yt.onError = (code) => this.onYtError(code);
+    this.yt.onAd = (on) => {
+      log('youtube', on ? 'ad playing before the song' : 'ad finished');
+      emit('player');
+    };
     bindControls({
       play: () => void this.resume(),
       pause: () => this.pause(),
@@ -149,6 +153,9 @@ export class Player {
   /** YouTube will not start a video in a collapsed player, so it is shown while one loads too. */
   get ytVisible(): boolean {
     return this.now?.route === 'yt' || this.ytLoading;
+  }
+  get ytAd(): boolean {
+    return this.ytLoading && this.yt.adPlaying;
   }
 
   /** Warm up the YouTube player so the first song starts quickly. */

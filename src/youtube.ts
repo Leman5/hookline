@@ -59,8 +59,14 @@ export class YouTubeDeck {
     return this.ready;
   }
 
+  /** True while YouTube plays something before the song itself (an ad). */
+  adPlaying = false;
+  onAd: (playing: boolean) => void = () => {};
+
   /**
    * Load a video at a start time and wait until it is actually playing.
+   * YouTube may play ads first: while something is visibly progressing the wait goes on, and it
+   * only gives up after a stretch with no progress (shorter in the background, where nothing starts).
    * Resolves with the YouTube error code on failure (0 for a timeout or no API).
    */
   async play(videoId: string, start: number, volume: number): Promise<{ ok: boolean; code: number }> {
@@ -69,19 +75,36 @@ export class YouTubeDeck {
     return new Promise((resolve) => {
       let done = false;
       const prevErr = this.onError;
+      const began = performance.now();
+      let lastProgress = began;
+      let lastTime = -1;
+      const setAd = (on: boolean) => {
+        if (this.adPlaying === on) return;
+        this.adPlaying = on;
+        this.onAd(on);
+      };
       const finish = (ok: boolean, code = 0) => {
         if (done) return;
         done = true;
         this.onError = prevErr;
-        clearTimeout(timer);
         clearInterval(poll);
+        setAd(false);
         resolve({ ok, code });
       };
       // Errors while loading belong to this video, not to whatever played before.
       this.onError = (code) => finish(false, code);
-      const timer = setTimeout(() => finish(false), 12000);
       const poll = setInterval(() => {
-        if (p.getPlayerState?.() === YT_PLAYING) finish(true);
+        const now = performance.now();
+        const state = p.getPlayerState?.();
+        if (state === YT_PLAYING) return finish(true);
+        const t = p.getCurrentTime?.() ?? 0;
+        if (lastTime >= 0 && t !== lastTime) {
+          lastProgress = now;
+          setAd(true);
+        }
+        lastTime = t;
+        const patience = document.visibilityState === 'hidden' ? 3000 : 12000;
+        if (now - lastProgress > patience || now - began > 150000) finish(false);
       }, 100);
       p.setVolume(volume);
       p.unMute();
