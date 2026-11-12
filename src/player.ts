@@ -82,6 +82,7 @@ export class Player {
   private ytStalledSince = 0;
   /** Where to pick the full song up when the screen comes back mid-song (seconds into the hook). */
   private ytResumeAt = 0;
+  private ytLoading = false;
   private unlocked = false;
 
   constructor(container: HTMLElement, ytHost: HTMLElement) {
@@ -144,6 +145,10 @@ export class Player {
   }
   get route(): Route | undefined {
     return this.now?.route;
+  }
+  /** YouTube will not start a video in a collapsed player, so it is shown while one loads too. */
+  get ytVisible(): boolean {
+    return this.now?.route === 'yt' || this.ytLoading;
   }
 
   /** Warm up the YouTube player so the first song starts quickly. */
@@ -557,6 +562,8 @@ export class Player {
     const startAt = target.yt!.start + (into > 0 && into < hookLen - 8 ? into : 0);
     const ids = [t.youtubeId!, ...(t.youtubeAlt ?? [])];
     let ok = false, permanent = true;
+    this.ytLoading = true;
+    emit('player');
     for (let i = 0; i < ids.length && !ok; i++) {
       const r = await this.yt.play(ids[i], startAt, fade > 0 ? 30 : 100);
       ok = r.ok;
@@ -575,7 +582,9 @@ export class Player {
         }
       }
     }
+    this.ytLoading = false;
     if (!ok) {
+      emit('player');
       const latest = target.track;
       if (permanent) {
         target.track = { ...latest, ytBroken: true };

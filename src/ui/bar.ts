@@ -42,11 +42,11 @@ export function mountBar(root: HTMLElement, player: Player, ytHost: HTMLElement)
 
   function render(): void {
     const item = player.current;
-    root.hidden = !item;
+    ytHost.classList.toggle('off', !player.ytVisible);
+    root.hidden = !item && !player.ytVisible;
     if (!item) return;
     const part = item.parts > 1 ? ` · part ${item.part + 1}/${item.parts}` : '';
     const via = player.route === 'yt' ? 'full song' : item.track.source === 'preview' ? '30 s preview' : 'your file';
-    ytHost.classList.toggle('off', player.route !== 'yt');
     title.textContent = item.track.title;
     sub.textContent = `${item.track.artist}${part} · ${item.list === 'gym' ? 'Gym' : 'Commute'} · ${via}`;
     const { pos, len } = player.position();
