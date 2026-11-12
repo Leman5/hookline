@@ -44,18 +44,24 @@ export function mountBar(root: HTMLElement, player: Player, ytHost: HTMLElement)
     const item = player.current;
     ytHost.classList.toggle('off', !player.ytVisible);
     root.hidden = !item && !player.ytVisible;
-    if (!item) return;
+    playBtn.textContent = player.wantPlaying ? '⏸' : '▶';
+    mode.textContent = settings.mode === 'highlights' ? 'Highlights' : 'Full songs';
+    const ad = player.ytAd ? 'YouTube ad · tap Skip when it appears' : '';
+    if (!item) {
+      // The first song is still loading (possibly behind an ad).
+      title.textContent = 'Starting…';
+      sub.textContent = ad || 'Loading the full song from YouTube';
+      fill.style.width = '0';
+      time.textContent = '';
+      return;
+    }
     const part = item.parts > 1 ? ` · part ${item.part + 1}/${item.parts}` : '';
     const via = player.route === 'yt' ? 'full song' : item.track.source === 'preview' ? '30 s preview' : 'your file';
     title.textContent = item.track.title;
-    sub.textContent = player.ytAd
-      ? 'YouTube ad, then the next full song (tap Skip when YouTube offers it)'
-      : `${item.track.artist}${part} · ${item.list === 'gym' ? 'Gym' : 'Commute'} · ${via}`;
+    sub.textContent = ad || `${item.track.artist}${part} · ${item.list === 'gym' ? 'Gym' : 'Commute'} · ${via}`;
     const { pos, len } = player.position();
     fill.style.width = len > 0 ? `${Math.min(100, (100 * pos) / len)}%` : '0';
     time.textContent = `${mmss(pos)} / ${mmss(len)}`;
-    playBtn.textContent = player.wantPlaying ? '⏸' : '▶';
-    mode.textContent = settings.mode === 'highlights' ? 'Highlights' : 'Full songs';
   }
   render();
   return render;
