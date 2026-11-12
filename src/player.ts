@@ -77,6 +77,11 @@ export class Player {
   private lastTimeupdate = 0;
   private stallTimer: number | undefined;
   private ytTimer: number | undefined;
+  /** The browser stopped YouTube in the background (phone locked): use audio until the screen is back. */
+  private ytSuspended = false;
+  private ytStalledSince = 0;
+  /** Where to pick the full song up when the screen comes back mid-song (seconds into the hook). */
+  private ytResumeAt = 0;
   private unlocked = false;
 
   constructor(container: HTMLElement, ytHost: HTMLElement) {
@@ -102,6 +107,7 @@ export class Player {
       if (this.now?.route !== 'yt' || this.transitioning) return;
       if (s === YT_ENDED) void this.next(true);
       // Keep our state in sync when the user taps YouTube's own pause/play controls.
+      else if (s === YT_PAUSED && this.wantPlaying && document.visibilityState === 'hidden') void this.ytStopped('paused in the background');
       else if (s === YT_PAUSED && this.wantPlaying && document.visibilityState === 'visible') {
         this.wantPlaying = false;
         this.quietPause(this.cur.el);
@@ -146,7 +152,8 @@ export class Player {
   }
 
   private routeFor(item: QueueItem): Route {
-    return settings.youtube && item.yt && !item.track.ytBroken && document.visibilityState === 'visible' ? 'yt' : 'audio';
+    const blocked = this.ytSuspended && document.visibilityState === 'hidden';
+    return settings.youtube && item.yt && !item.track.ytBroken && !blocked ? 'yt' : 'audio';
   }
 
   /** Start a playlist. Must be called from a user gesture. */
@@ -325,6 +332,8 @@ export class Player {
   // ---------- audio deck events ----------
 
   private onTime(d: Deck): void {
+    // While YouTube plays, the silent keeper's timeupdates keep firing even on a locked phone.
+    if (this.now?.route === 'yt') return this.checkYt();
     if (d !== this.cur || !d.item || this.now?.route !== 'audio') return;
     const now = performance.now();
     if (this.lastTimeupdate && now - this.lastTimeupdate > 1500 && !d.el.paused) {
@@ -393,6 +402,7 @@ export class Player {
     this.ytTimer = setInterval(() => {
       const n = this.now;
       if (!n || n.route !== 'yt' || !n.item.yt || this.transitioning || !this.wantPlaying) return;
+      this.checkYt();
       const t = this.yt.time();
       const fade = this.fadeLen();
       const left = n.item.yt.end - t;
@@ -415,23 +425,60 @@ export class Player {
     if (n && (code === 100 || code === 101 || code === 150)) void saveTrack({ ...n.item.track, ytBroken: true });
   }
 
-  /** The screen locked (or the app went to the background) while YouTube played: carry on with audio. */
+  /**
+   * Going to the background does not by itself stop YouTube (desktop tabs, some phones keep playing),
+   * so only switch to audio once the browser has actually paused or stalled the video.
+   */
+  private checkYt(): void {
+    if (document.visibilityState !== 'hidden' || this.now?.route !== 'yt' || !this.wantPlaying || this.transitioning) {
+      this.ytStalledSince = 0;
+      return;
+    }
+    const s = this.yt.state();
+    if (s === YT_PLAYING) {
+      this.ytStalledSince = 0;
+    } else if (s === YT_PAUSED) {
+      void this.ytStopped('paused in the background');
+    } else {
+      const now = performance.now();
+      if (!this.ytStalledSince) this.ytStalledSince = now;
+      else if (now - this.ytStalledSince > 3000) void this.ytStopped(`stalled in the background (state ${s})`);
+    }
+  }
+
+  private async ytStopped(why: string): Promise<void> {
+    if (this.now?.route !== 'yt' || !this.wantPlaying || this.transitioning) return;
+    log('handoff', `YouTube ${why}`);
+    this.ytSuspended = true;
+    this.ytStalledSince = 0;
+    await this.handOff();
+  }
+
   private onVisibility(): void {
     log('visibility', document.visibilityState);
-    if (document.visibilityState !== 'hidden' || this.now?.route !== 'yt' || !this.wantPlaying) return;
-    void this.handOff();
+    if (document.visibilityState !== 'visible') return;
+    // Screen back on: full songs again, picking the current song up where its audio version is.
+    const wasSuspended = this.ytSuspended;
+    this.ytSuspended = false;
+    const n = this.now;
+    if (!wasSuspended || !n || n.route !== 'audio' || !this.wantPlaying || this.transitioning) return;
+    if (!settings.youtube || !n.item.yt || n.item.track.ytBroken) return;
+    this.ytResumeAt = this.position().pos;
+    log('handoff', `screen on: ${n.item.track.title} continues in full`);
+    this.idx -= 1;
+    void this.next(false);
   }
 
   private async handOff(): Promise<void> {
     if (this.transitioning) {
       // Let the running transition finish, then re-check.
       await sleep(300);
-      if (this.now?.route === 'yt' && document.visibilityState === 'hidden') return this.handOff();
+      if (this.now?.route === 'yt' && this.ytSuspended && document.visibilityState === 'hidden') return this.handOff();
       return;
     }
     const item = this.now!.item;
     this.stopYt();
-    log('handoff', `screen off: ${item.track.title} continues as ${item.track.source}`);
+    log('handoff', `${item.track.title} continues as the ${item.track.source}`);
     this.idx -= 1; // replay the same queue item through the audio route
     await this.next(false, true);
   }
@@ -462,7 +509,9 @@ export class Player {
             this.began(target, 'yt');
             return;
           }
-          // YouTube failed: fall through to the audio version of the same song.
+          // YouTube failed: fall through to the audio version of the same song. In the background
+          // that usually means the browser will not start new videos, so stay on audio until visible.
+          if (document.visibilityState === 'hidden') this.ytSuspended = true;
         }
         if (fromYt) this.stopYt();
         if (await this.load(this.idle, target)) {
@@ -502,10 +551,14 @@ export class Player {
     await this.keeperOn();
     // Try each known upload of the song: labels often block embedding on some of them.
     const t = target.track;
+    const into = this.ytResumeAt;
+    this.ytResumeAt = 0;
+    const hookLen = target.yt!.end - target.yt!.start;
+    const startAt = target.yt!.start + (into > 0 && into < hookLen - 8 ? into : 0);
     const ids = [t.youtubeId!, ...(t.youtubeAlt ?? [])];
     let ok = false, permanent = true;
     for (let i = 0; i < ids.length && !ok; i++) {
-      const r = await this.yt.play(ids[i], target.yt!.start, fade > 0 ? 30 : 100);
+      const r = await this.yt.play(ids[i], startAt, fade > 0 ? 30 : 100);
       ok = r.ok;
       if (ok) {
         if (i > 0) {
@@ -517,7 +570,8 @@ export class Player {
         log('error', `YouTube ${r.code || 'timeout'} on ${t.title} (${ids[i]})`);
         if (r.code !== 100 && r.code !== 101 && r.code !== 150) {
           permanent = false; // network trouble or timeout: keep the videos for next time
-          break;
+          // A background tab will not start any video, so trying the other uploads only adds silence.
+          if (document.visibilityState === 'hidden') break;
         }
       }
     }
@@ -638,7 +692,8 @@ export class Player {
     this.wantPlaying = true;
     if (this.now.route === 'yt') {
       if (document.visibilityState === 'hidden') {
-        // Lock-screen play button: YouTube cannot play in the background, so use the audio version.
+        // Lock-screen play button: a paused background video usually cannot restart, so use audio.
+        this.ytSuspended = true;
         await this.keeperOn();
         await this.handOff();
         return;

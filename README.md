@@ -9,10 +9,12 @@ It's a static web app installed to the home screen (a PWA), with about 19 KB of 
 | Situation | What you hear |
 |---|---|
 | Screen on, song has a YouTube video | The **full song** in the visible YouTube player, cut to a ~65–75 s hook |
-| Screen locked (or app in background) | The same playlist continues with Apple's free **30 s previews** on a plain `<audio>` element, with lock-screen controls |
+| Another tab or window, and the browser keeps YouTube playing (desktop) | Still the **full song** |
+| Phone locked and the browser pauses YouTube | The same song continues as Apple's free **30 s preview** on a plain `<audio>` element, with lock-screen controls |
+| Screen back on | Back to the **full song**, picking up where the hook had got to |
 | A music file you imported | The **full file**, with chorus/drop detection run on your phone; keeps playing when locked |
 
-Locking hands off without a gap. While YouTube plays, the app keeps a silent audio track running, so it already owns a playing media element. When the screen locks it switches that element to the audio version of the current song. YouTube itself never plays in the background: Chrome pauses it, and YouTube's terms only allow background play with YouTube Premium.
+Hookline never forces YouTube to play in the background. It switches to the preview only when the browser has actually paused or stalled the video. While YouTube plays, the app keeps a silent audio track running, so it already owns a playing media element. When YouTube stops, that element takes over with the audio version of the current song, without a gap. YouTube's terms only allow background play with YouTube Premium, and Chrome on Android normally pauses embedded videos when the screen locks.
 
 ### Highlight detection (your own files)
 
@@ -36,9 +38,9 @@ You can edit any highlight on the song's **Edit** screen, by dragging or with 5 
 ### Phone checklist
 
 - [ ] Play **Gym** with the screen on: full songs from YouTube, each moves on after its hook.
-- [ ] Lock the phone: music keeps going (now as 30 s previews), and the next songs play automatically.
+- [ ] Lock the phone: music keeps going (full song if Chrome allows it, otherwise the 30 s preview), and the next songs play automatically.
 - [ ] Lock-screen controls work: pause, play, next, previous, artwork.
-- [ ] Unlock: the next song is a full YouTube song again.
+- [ ] Unlock: the current song switches back to the full YouTube version.
 - [ ] **Commute** works the same way.
 - [ ] Bluetooth headset buttons work.
 - [ ] An incoming call pauses playback, and it doesn't restart on its own.
