@@ -98,7 +98,10 @@ for (const song of order) {
 
 const entry = (s) => {
   const y = cache[s.id];
-  return y?.videoId ? `${s.id}~${[y.videoId, ...(y.alt ?? [])].join('.')}~${y.seconds}` : `${s.id}`;
+  if (!y?.videoId) return `${s.id}`;
+  // Optional 4th field: the chorus found from synced lyrics (find-hooks.mjs), as start-end seconds.
+  const hook = y.hook ? `~${y.hook.start}-${y.hook.end}` : '';
+  return `${s.id}~${[y.videoId, ...(y.alt ?? [])].join('.')}~${y.seconds}${hook}`;
 };
 const ids = (l) => [...new Map(seeds.filter((s) => s.list === l).map((s) => [s.id, entry(s)])).values()].join(',');
 const link = `${appUrl}#seed=in;c:${ids('commute')};g:${ids('gym')}`;

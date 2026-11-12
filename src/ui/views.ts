@@ -129,7 +129,7 @@ export function playlistView(list: ListId, player: Player): HTMLElement {
     const segs = segmentsFor(t, list);
     const yt = settings.youtube && t.source === 'preview' ? ytSegmentFor(t, list) : undefined;
     const chips = yt
-      ? [h('span', { class: 'seg', text: `full song ${mmss(yt.start)}–${mmss(yt.end)}` }), h('span', { class: 'seg alt', text: 'locked: 30 s preview' })]
+      ? [h('span', { class: 'seg', text: `${t.ytHook ? 'chorus' : 'guessed'} ${mmss(yt.start)}–${mmss(yt.end)}` }), h('span', { class: 'seg alt', text: 'locked: 30 s preview' })]
       : segs.map((s) =>
           h('span', { class: 'seg', text: s.end > 0 ? `${mmss(s.start)}–${mmss(s.end)}` : t.source === 'preview' ? 'preview clip' : 'whole song' }),
         );

@@ -33,6 +33,8 @@ export interface Track {
   youtubeAlt?: string[];
   /** Length of that video in seconds. */
   ytDuration?: number;
+  /** The chorus in that video (seconds), found from time-synced lyrics when the seed was built. */
+  ytHook?: Segment;
   /** The video failed to play (removed, embedding disabled); skip YouTube for this track. */
   ytBroken?: boolean;
   addedAt: number;

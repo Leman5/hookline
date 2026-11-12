@@ -45,7 +45,9 @@ export function mountBar(root: HTMLElement, player: Player, ytHost: HTMLElement)
     ytHost.classList.toggle('off', !player.ytVisible);
     root.hidden = !item && !player.ytVisible;
     playBtn.textContent = player.wantPlaying ? '⏸' : '▶';
-    mode.textContent = settings.mode === 'highlights' ? 'Highlights' : 'Full songs';
+    mode.textContent = settings.mode === 'highlights' ? 'Hooks only' : 'Whole songs';
+    mode.title = settings.mode === 'highlights' ? 'Playing each song’s chorus, then the next song. Tap for whole songs.' : 'Playing whole songs. Tap to play only the hooks.';
+    mode.classList.toggle('warn', settings.mode !== 'highlights');
     const ad = player.ytAd ? 'YouTube ad · tap Skip when it appears' : '';
     if (!item) {
       // The first song is still loading (possibly behind an ad).

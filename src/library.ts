@@ -15,6 +15,8 @@ export interface Settings {
   /** Play the full song from YouTube while the screen is on. */
   youtube: boolean;
   country: string;
+  /** Settings layout version, for one-time changes on update. */
+  v?: number;
 }
 
 export const tracks = new Map<string, Track>();
@@ -35,6 +37,11 @@ export async function load(): Promise<void> {
   for (const a of as) if (a.version === ANALYSIS_VERSION) analyses.set(a.id, a);
   for (const o of os) overrides.set(o.id, o.segs);
   if (s) settings = { ...settings, ...s };
+  if ((settings.v ?? 0) < 2) {
+    // Version 2 detects each song's chorus: start everyone on highlights once, whatever the old toggle said.
+    settings = { ...settings, mode: 'highlights', v: 2 };
+    await db.put('kv', 'settings', settings);
+  }
   history = h ?? {};
 }
 
@@ -82,10 +89,23 @@ export function segmentsFor(t: Track, list: ListId, mode = settings.mode): Segme
   return analysisOf(t)?.segments[list] ?? [{ start: 0, end: -1 }];
 }
 
-/** Hook length for full YouTube songs, close to what feels natural in a DJ-style mix. */
+/** Hook length for full YouTube songs when no chorus was detected. */
 const YT_HOOK: Record<ListId, number> = { commute: 75, gym: 65 };
+/** How much of a detected chorus to play: a short lead-in before it, then the chorus within these bounds. */
+const CHORUS_FIT: Record<ListId, { lead: number; min: number; max: number }> = {
+  commute: { lead: 2, min: 40, max: 70 },
+  gym: { lead: 1, min: 25, max: 50 },
+};
 
 export const ytKey = (id: string) => `${id}#yt`;
+
+/** Play the detected chorus from just before it starts, at least min and at most max seconds. */
+export function fitChorus(hook: Segment, list: ListId, dur: number): Segment {
+  const f = CHORUS_FIT[list];
+  const start = Math.max(0, hook.start - f.lead);
+  const len = Math.min(f.max, Math.max(f.min, hook.end + 1 - start));
+  return { start, end: Math.max(start + 5, Math.min(dur - 1, start + len)) };
+}
 
 /** The window of the full YouTube song to play. No audio access, so: user edit, else a typical hook position. */
 export function ytSegmentFor(t: Track, list: ListId, mode = settings.mode): Segment | undefined {
@@ -94,7 +114,8 @@ export function ytSegmentFor(t: Track, list: ListId, mode = settings.mode): Segm
   if (mode === 'full') return { start: 0, end: dur };
   const o = overrides.get(ytKey(t.id))?.[list]?.[0];
   if (o) return o;
-  // Film songs usually reach the first chorus 10-15% in, after the intro.
+  if (t.ytHook) return fitChorus(t.ytHook, list, dur);
+  // No lyrics to go by: film songs usually reach the first chorus 10-15% in, after the intro.
   const start = Math.round(Math.min(45, Math.max(15, 0.11 * dur)));
   return { start, end: Math.min(dur - 5, start + YT_HOOK[list]) };
 }
@@ -181,6 +202,8 @@ export interface SeedEntry {
   /** Candidate YouTube video ids, best first. */
   yt?: string[];
   ytDur?: number;
+  /** Chorus start and end in the first video, when one was detected. */
+  hook?: Segment;
 }
 
 /** "in;c:1~vidA.vidB~245,2;g:3" -> country and entries per list. "~videoIds~seconds" is optional. */
@@ -193,11 +216,13 @@ export function parseSeed(raw: string): { country: string; lists: Record<ListId,
     const entries = v
       .split(',')
       .map((e): SeedEntry => {
-        const [id, yt, dur] = e.split('~');
+        const [id, yt, dur, hook] = e.split('~');
+        const [hs, he] = (hook ?? '').split('-').map(Number);
         return {
           id: Number(id),
           yt: yt ? yt.split('.').filter((v) => /^[\w-]{11}$/.test(v)) : undefined,
           ytDur: dur && Number(dur) > 0 ? Number(dur) : undefined,
+          hook: hs >= 0 && he > hs ? { start: hs, end: he } : undefined,
         };
       })
       .filter((e) => Number.isInteger(e.id) && e.id > 0);
@@ -257,6 +282,7 @@ export async function applySeed(raw: string): Promise<number> {
       youtubeId: ytOf.get(r.trackId)?.yt?.[0] ?? prev?.youtubeId,
       youtubeAlt: ytOf.has(r.trackId) ? ytOf.get(r.trackId)!.yt!.slice(1) : prev?.youtubeAlt,
       ytDuration: ytOf.get(r.trackId)?.ytDur ?? prev?.ytDuration ?? (r.trackTimeMillis ? r.trackTimeMillis / 1000 : undefined),
+      ytHook: ytOf.has(r.trackId) ? ytOf.get(r.trackId)!.hook : prev?.ytHook,
       ytBroken: ytOf.has(r.trackId) ? false : prev?.ytBroken,
       addedAt: prev?.addedAt ?? now,
     };

@@ -51,6 +51,7 @@ audio { display: none; }
   border-radius: 999px; padding: 6px 12px; text-decoration: none; cursor: pointer; white-space: nowrap; min-height: 34px;
   display: inline-flex; align-items: center;
 }
+.chip.warn { border-color: var(--accent); color: var(--accent); }
 .input { font: inherit; flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
 .row { display: flex; gap: 8px; align-items: center; }
 .row.wrap { flex-wrap: wrap; }
